@@ -3,20 +3,20 @@ import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import CheckIcon from "@mui/icons-material/Check";
 import {Link} from "@mui/icons-material";
 import React, {useState} from "react";
+import {useAppSelector} from "../app/hooks";
 
-export default function RoomStatus(props: {
-    roomId: string
-}) {
+export default function RoomStatus() {
+    const roomId=useAppSelector(state => state.roomManager.room?.roomId)
 
     const [isCopied, setIsCopied] = useState(false);
     const [isUrlCopied, setIsUrlCopied] = useState(false);
-    const Checked = async () => {
+    const Checked =  () => {
         setIsCopied(true);
         setTimeout(() => {
             setIsCopied(false);
         }, 1000);
     };
-    const CheckedUrl = async () => {
+    const CheckedUrl =  () => {
         setIsUrlCopied(true);
         setTimeout(() => {
             setIsUrlCopied(false);
@@ -25,11 +25,11 @@ export default function RoomStatus(props: {
     return (
         <div>
             <span>
-                この部屋のID: {}
+                この部屋のID: {roomId}
                 <IconButton
                     aria-label='copy'
                     onClick={() => {
-                        navigator.clipboard.writeText(props.roomId).then(() => Checked());
+                        navigator.clipboard.writeText(roomId!).then(() => Checked());
                     }}
                 > {' '}
                     {!isCopied ? <ContentCopyIcon/> : <CheckIcon/>}
@@ -37,9 +37,8 @@ export default function RoomStatus(props: {
                 <IconButton
                     aria-label='copyLink'
                     onClick={() => {
-                        const shareUrl = window.location.origin + "?roomId=" + props.roomId
-                        navigator.clipboard.writeText(shareUrl).then(r => CheckedUrl());
-
+                        const shareUrl = window.location.origin + "?roomId=" + roomId!
+                        navigator.clipboard.writeText(shareUrl).then(() => CheckedUrl());
                     }}
                 >
                     {' '}

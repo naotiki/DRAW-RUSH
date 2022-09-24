@@ -6,16 +6,18 @@ import reportWebVitals from './reportWebVitals';
 import './style.css';
 import Room from './components/Chat';
 import  "./odaiLoader"
-
+import {Provider} from "react-redux";
+import store from "./app/store"
 const container = document.getElementById('root');
 const root = createRoot(container!);
 
 root.render(
   <div>
-    <CookiesProvider>
-    <Room />
-
-    </CookiesProvider>
+      <Provider store={store}>
+          <CookiesProvider>
+              <Room />
+          </CookiesProvider>
+      </Provider>
   </div>
 );
 // If you want to start measuring performance in your app, pass a function
