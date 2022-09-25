@@ -18,18 +18,11 @@ import {
     Button,
     IconButton,
     InputAdornment,
-    Typography,
-    TableContainer,
-    Paper,
-    Table,
-    TableHead, TableRow, TableCell, TableBody, Checkbox
+    Typography
 } from '@mui/material';
 import {Lock, LockOpen, PlayCircleOutline, Send} from '@mui/icons-material';
-import CheckIcon from '@mui/icons-material/Check';
 import DrawZone, {DrawZoneRef} from './DrawZone';
 import {ref as storageRef, uploadString, getDownloadURL} from 'firebase/storage';
-import useCacheState from '../CacheState'
-import ClearIcon from '@mui/icons-material/Clear'
 import {getRandomOdai} from '../odaiLoader'
 import './../test.css'
 import getParam from '../getParam'
@@ -38,26 +31,20 @@ import firebase from "firebase/compat";
 import Unsubscribe = firebase.Unsubscribe;
 import JoinForm from "./JoinForm";
 import RoomStatus from "./RoomStatus";
+import {useCacheState} from "../app/hooks";
+import {useResettableState, useResetter} from "../app/resetter";
+import {AnswerData} from "./AnswersTable";
+import {GameProgress} from "../app/slices/gameManager";
 
-const GameState = {
-    //enum風
-    WAIT_MORE_MEMBER: 'waitMember', //独りぼっち　さみしい
 
-    WAIT_START: 'waitStart', //スタート待ち
-    DRAW: 'draw', //お絵描き中、画像アップロード待ち
-    CHAT: 'chat', //話し合い中
-    CHECK_ANSWER: 'checkAnswer', //答え合わせ
-    RESULT: 'result', //結果ー＞goto DRAW or END
-
-    END: 'end', //ゲーム終了
-};
 
 export const Room = () => {
+    const r=useResetter<1|2>()
     const chatscrollRef = useRef<HTMLDivElement>(null);
     const allRoomRef = collection(firestore, 'rooms');
     //呼び出せる関数はDrawZone.jsxのL14らへんに定義してあります。
     const drawZoneRef = useRef<DrawZoneRef>();
-    const [getGameState, setGameState, stateGameState] = useCacheState('');
+    const [getGameState, setGameState, stateGameState] = useCacheState<GameProgress|undefined>(undefined);
     const [getPainter, setPainter] = useCacheState('');
     const [isJoined, setIsJoined] = useState(false);
     const [roomName, setroomName] = useState('');
@@ -69,17 +56,11 @@ export const Room = () => {
     const [cookie, setCookie, removeCookie] = useCookies();
     const [userDictionary, setUserDictionary] = useState<Map<string, string>>(new Map());
     const firestoreListenersRef = useRef<Unsubscribe[]>([]);
-    const [isCopied, setIsCopied] = useState(false);
-    const [isUrlCopied, setIsUrlCopied] = useState(false);
-    const [imgUrl, setImgUrl] = useState('');
+    const [imgUrl, setImgUrl,resetImgUrl] = useResettableState('',r,[1]);
     const [ansLocked, setAnsLocked] = useState(false);
     const [sentAnswer, setSentAnswer] = useState(false);
     const [answer, setAnswer] = useState('');
-    type AnswerData = {
-        answer: string,
-        userId: string,
-        isCorrect: boolean
-    }
+
     const [answerDatas, setAnswerDatas] = useState<AnswerData[]>([]);
     const [odai, setOdai] = useState('');
     const [isCompositionend, setIsCompositionend] = useState(false);
@@ -106,32 +87,33 @@ export const Room = () => {
         }
     }, []);
     const Clean = () => {
-        setImgUrl("");
+        resetImgUrl()
         setAnsLocked(false);
         setSentAnswer(false);
         setAnswer('');
         setAnswerDatas([]);
         setOdai('')
+
     }
 
     //ゲームの進行状態を監視
     useEffect(() => {
         console.log(getGameState());
         switch (getGameState()) {
-            case GameState.WAIT_MORE_MEMBER: {
+            case GameProgress.WAIT_MORE_MEMBER: {
                 break;
             }
-            case GameState.WAIT_START: {
+            case GameProgress.WAIT_START: {
                 //キレイキレイ
                 Clean();
                 setOdai(getRandomOdai())
 
                 break;
             }
-            case GameState.DRAW: {
+            case GameProgress.DRAW: {
                 break;
             }
-            case GameState.CHAT: {
+            case GameProgress.CHAT: {
                 /*getBlob().then((blob) => {
                     const url = window.URL || window.webkitURL
 url.createObjectURL(blob)
@@ -156,10 +138,10 @@ url.createObjectURL(blob)
                     });
                 break;
             }
-            case GameState.CHECK_ANSWER: {
+            case GameProgress.CHECK_ANSWER: {
                 break;
             }
-            case GameState.RESULT: {
+            case GameProgress.RESULT: {
                 if (isPainter) {
 
                 } else {
@@ -187,7 +169,7 @@ url.createObjectURL(blob)
                 }
                 break;
             }
-            case GameState.END: {
+            case GameProgress.END: {
                 break;
             }
             default:
@@ -205,8 +187,10 @@ url.createObjectURL(blob)
         setSendMessage('');
     };
 
+    //日本語チェック
     const jaRegexp = /^[\u30a0-\u30ff\u3040-\u309f\u3005-\u3006\u30e0-\u9fcf]+$/
 
+    //変換時のEnter対策
     const handleSubmitKey = async (e: React.KeyboardEvent) => {
         e.preventDefault();
         if (sendMessage.trim() === '') return
@@ -224,18 +208,6 @@ url.createObjectURL(blob)
         }
     };
 
-    const Checked = async () => {
-        setIsCopied(true);
-        setTimeout(() => {
-            setIsCopied(false);
-        }, 1000);
-    };
-    const CheckedUrl = async () => {
-        setIsUrlCopied(true);
-        setTimeout(() => {
-            setIsUrlCopied(false);
-        }, 1000);
-    };
     const GetUserNameById = (uid: string) => {
         return (userDictionary.get(uid) || 'Unknown太郎');
     }
@@ -269,7 +241,7 @@ url.createObjectURL(blob)
         </section>)
 
     };
-    const SetGameState = async (state: string) => {
+    const SetGameState = async (state: GameProgress) => {
         console.log(state);
         console.log(roomRef.current);
         await updateDoc(roomRef.current!, {State: state});
@@ -302,8 +274,8 @@ url.createObjectURL(blob)
             } else {
                 const State = docSnap.data().State;
                 if (
-                    State === GameState.WAIT_MORE_MEMBER ||
-                    State === GameState.WAIT_START || (roomId.current && userId.current)
+                    State === GameProgress.WAIT_MORE_MEMBER ||
+                    State === GameProgress.WAIT_START || (roomId.current && userId.current)
                 ) {
                     setGameState(State)
                     SetRoomID(rN);
@@ -392,7 +364,7 @@ url.createObjectURL(blob)
                                     //setPainter(userId.userId)
                                 });
                             }
-                            SetGameState(GameState.WAIT_MORE_MEMBER);
+                            SetGameState(GameProgress.WAIT_MORE_MEMBER);
                         };
 
                         const userIds = Object.keys(tmp)
@@ -405,15 +377,15 @@ url.createObjectURL(blob)
                                 updateDoc(roomRef.current!, {
                                     Painter: userId.current,
                                 }).then(() => {
-                                    SetGameState(GameState.WAIT_START)
+                                    SetGameState(GameProgress.WAIT_START)
                                 });
                             }
                             if (getPainter() === userId.current) {
-                                if (getGameState() === GameState.WAIT_MORE_MEMBER) {
-                                    SetGameState(GameState.WAIT_START);
-                                } else if (getGameState() === GameState.CHAT) {
+                                if (getGameState() === GameProgress.WAIT_MORE_MEMBER) {
+                                    SetGameState(GameProgress.WAIT_START);
+                                } else if (getGameState() === GameProgress.CHAT) {
                                     if (querySnapshot.docs.every(doc => doc.data().answer || getPainter() === doc.id)) {
-                                        SetGameState(GameState.CHECK_ANSWER).then(() => {
+                                        SetGameState(GameProgress.CHECK_ANSWER).then(() => {
                                             let tmp_answerDatas: AnswerData[] = [];
                                             querySnapshot.forEach((doc) => {
                                                 if (getPainter() !== doc.id) {
@@ -429,9 +401,9 @@ url.createObjectURL(blob)
                                         })
                                     }
                                 }
-                            } else if (getGameState() === GameState.CHAT) {
+                            } else if (getGameState() === GameProgress.CHAT) {
                                 if (querySnapshot.docs.every(doc => doc.data().answer || getPainter() === doc.id)) {
-                                    SetGameState(GameState.CHECK_ANSWER).then(() => {
+                                    SetGameState(GameProgress.CHECK_ANSWER).then(() => {
                                         let tmp_answerDatas: AnswerData[] = [];
                                         querySnapshot.forEach((doc) => {
                                             if (getPainter() !== doc.id) {
@@ -482,7 +454,7 @@ url.createObjectURL(blob)
             setUserDictionary(new Map());
             // balloonRef.current.syncUsers({});
             setMessages('');
-            setGameState('');
+            setGameState(undefined);
             setroomName("");
             setUserName("");
             removeCookie('userId');
@@ -515,7 +487,7 @@ url.createObjectURL(blob)
             }
         }
         Async().then(() => {
-            SetGameState(GameState.RESULT)
+            SetGameState(GameProgress.RESULT)
         })
     }
     const StartNewGame = useCallback(() => {
@@ -523,14 +495,13 @@ url.createObjectURL(blob)
         updateDoc(roomRef.current!, {
             Painter: uids[Math.floor(Math.random() * uids.length)]
         }).then(() => {
-            SetGameState(GameState.WAIT_START);
+            SetGameState(GameProgress.WAIT_START);
         })
     }, [userDictionary])
-
     return (
         <div>
             <div style={{width: '50%', flex: 1, flexDirection: 'row'}}>
-               <JoinForm Join={a}/>
+               <JoinForm />
                 <RoomStatus/>
                 {isJoined ? (
                     <>
@@ -604,7 +575,7 @@ url.createObjectURL(blob)
                                 ), imageDataUrl, 'data_url', {cacheControl: "no-cache"}).then(
                                     (snapshot) => {
 
-                                        SetGameState(GameState.CHAT);
+                                        SetGameState(GameProgress.CHAT);
                                     }
                                 );
                             }}
@@ -613,7 +584,7 @@ url.createObjectURL(blob)
                                         <Typography
 
                                             variant={"h6"}>
-                                            {GameState.WAIT_START !== stateGameState ?
+                                            {GameProgress.WAIT_START !== stateGameState ?
                                                 "メンバーが集まるまでお待ちください" :
                                                 "今から3秒間の間に上のお題を描いてください。当ててもらえるように頑張って！！"
                                             }
@@ -621,9 +592,9 @@ url.createObjectURL(blob)
                                         </Typography>
                                         <p>
                                             <Button variant={"contained"}
-                                                    disabled={GameState.WAIT_START !== stateGameState}
+                                                    disabled={GameProgress.WAIT_START !== stateGameState}
                                                     onClick={() => {
-                                                        SetGameState(GameState.DRAW).then(() => {
+                                                        SetGameState(GameProgress.DRAW).then(() => {
                                                             drawZoneRef.current!.start();
                                                         })
                                                     }}><PlayCircleOutline></PlayCircleOutline>ここをクリックでスタート</Button>
@@ -633,7 +604,7 @@ url.createObjectURL(blob)
                         />
                     </>
                 )}
-                {getGameState() === GameState.CHAT && imgUrl !== '' &&
+                {getGameState() === GameProgress.CHAT && imgUrl !== '' &&
                     <>
 
                         {!isPainter ?
@@ -668,60 +639,13 @@ url.createObjectURL(blob)
                             </div> : <></>}
                     </>
                 }
-                {(getGameState() === GameState.CHECK_ANSWER || getGameState() === GameState.RESULT) && answerDatas.length !== 0 &&
+                {(getGameState() === GameProgress.CHECK_ANSWER || getGameState() === GameProgress.RESULT) && answerDatas.length !== 0 &&
                     <>
                         <div>
-                            <TableContainer component={Paper}>
-                                <Table>
-                                    <TableHead>
-                                        <TableRow>
-                                            <TableCell>名前</TableCell>
-                                            <TableCell>回答</TableCell>
-                                            {(isPainter || getGameState() === GameState.RESULT) ?
-                                                <TableCell>正誤(正しければ<Checkbox checked={true}/>)</TableCell> : <></>}
-                                        </TableRow>
-                                    </TableHead>
-                                    <TableBody>
-                                        {answerDatas.map((ans, index) => (
 
-                                            <TableRow
-                                                style={{backgroundColor: (ans.userId === userId.current ? getGameState() === GameState.RESULT ? ans.isCorrect ? '#90ee90' : '#ffa07a' : '#add8e6' : '')}}
-                                                key={ans.userId}
-                                                sx={{'&:last-child td, &:last-child th': {border: 0}}}
-                                            >
-                                                <TableCell component="th" scope="row">
-                                                    {GetUserNameById(ans.userId)}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {ans.answer}
-                                                </TableCell>
-                                                {(isPainter || getGameState() === GameState.RESULT) ? <TableCell>
-                                                    <Checkbox
-                                                        checked={ans.isCorrect}
-                                                        disabled={getGameState() === GameState.RESULT}
-                                                        onChange={(event, checked) => {
-                                                            setAnswerDatas((prevState) =>
-                                                                prevState.map((preAns, i) => (i === index ? {
-                                                                    ...preAns,
-                                                                    isCorrect: event.target.checked
-                                                                } : preAns))
-                                                            )
-                                                        }}
-                                                        inputProps={{'aria-label': 'controlled'}}
-                                                        icon={<IconButton>{ans.isCorrect ? <CheckIcon/> :
-                                                            <ClearIcon/>}</IconButton>}
-
-                                                    ></Checkbox>
-                                                </TableCell> : <></>}
-                                            </TableRow>
-                                        ))
-                                        }
-                                    </TableBody>
-                                </Table>
-                            </TableContainer>
-                            {(!(sentAnswer && !isPainter) || isPainter) && getGameState() === GameState.CHECK_ANSWER ?
+                            {(!(sentAnswer && !isPainter) || isPainter) && getGameState() === GameProgress.CHECK_ANSWER ?
                                 <Button variant={"contained"} onClick={SubmitResult}>結果を送信</Button> : <></>}
-                            {(getGameState() === GameState.RESULT && isPainter) &&
+                            {(getGameState() === GameProgress.RESULT && isPainter) &&
                                 <Button variant={"contained"} onClick={StartNewGame}>次のゲーム</Button>
                             }
                         </div>
